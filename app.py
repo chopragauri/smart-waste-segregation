@@ -414,19 +414,28 @@ def render_live_sidebar_detections(placeholder, detections):
             )
 
 
-def run_live_feed(model, source, confidence, save_interval):
+def grab_webcam_frame(cam_index=0):
+    """Grab a single frame from local webcam via OpenCV."""
+    cap = cv2.VideoCapture(cam_index)
+    if not cap.isOpened():
+        cap.release()
+        return None
+    ret, frame = cap.read()
+    cap.release()
+    if ret and frame is not None:
+        return cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    return None
+
+
+def run_live_feed(model, source, confidence, save_interval, source_label=""):
     """
-    Live feed using OpenCV VideoCapture (webcam or DroidCam IP).
-    Uses st.rerun() loop — one frame per script run for responsive buttons.
+    Live feed — keeps camera open in a loop for smooth video.
+    source: int (webcam index) or str (DroidCam IP).
     """
-    # Determine source type
-    if isinstance(source, int):
-        source_label = f"Webcam (index {source})"
-    else:
-        base_url = normalize_droidcam_url(source)
-        source_label = base_url
-        # Try video stream, fallback to snapshot
-        source = base_url + "/video"
+    import urllib.request
+
+    if not source_label:
+        source_label = f"Webcam {source}" if isinstance(source, int) else normalize_droidcam_url(source)
 
     st.markdown(
         "<span class='live-badge'>LIVE</span> &nbsp; "
@@ -442,72 +451,131 @@ def run_live_feed(model, source, confidence, save_interval):
         st.subheader("Live Detections")
         stats_placeholder = st.empty()
     table_placeholder = st.empty()
+    points_placeholder = st.empty()
 
-    # Grab one frame
-    frame_rgb = None
-    cap = cv2.VideoCapture(source if isinstance(source, str) else source)
+    # Open camera / stream once and keep it open
+    cap = None
+    use_snapshot = False
+
     if isinstance(source, int):
         cap = cv2.VideoCapture(source)
-    if cap.isOpened():
-        ret, frame = cap.read()
-        cap.release()
-        if ret and frame is not None:
-            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        if not cap.isOpened():
+            video_placeholder.error(
+                "Cannot access webcam.\n\n"
+                "**Troubleshooting:**\n"
+                "- Run Streamlit from **Terminal.app** (not Claude)\n"
+                "- Allow camera: System Settings > Privacy > Camera > Terminal\n"
+                "- Close other apps using the camera"
+            )
+            st.session_state.live_running = False
+            return
     else:
-        cap.release()
+        base_url = normalize_droidcam_url(source)
+        # Try video stream first
+        cap = cv2.VideoCapture(base_url + "/video")
+        if not cap.isOpened():
+            cap.release()
+            cap = None
+            use_snapshot = True
+            # Test snapshot works
+            try:
+                resp = urllib.request.urlopen(base_url + "/shot.jpg", timeout=5)
+                _ = resp.read()
+            except Exception:
+                video_placeholder.error(
+                    f"Cannot connect to DroidCam at `{base_url}`.\n\n"
+                    "**Troubleshooting:**\n"
+                    "- DroidCam app is open on your phone\n"
+                    "- Phone and computer on **same WiFi**"
+                )
+                st.session_state.live_running = False
+                return
 
-    # If camera source failed, try DroidCam snapshot as fallback
-    if frame_rgb is None and isinstance(source, str):
-        import urllib.request
-        snapshot_url = normalize_droidcam_url(source) + "/shot.jpg"
-        try:
-            resp = urllib.request.urlopen(snapshot_url, timeout=5)
-            img_array = np.frombuffer(resp.read(), dtype=np.uint8)
-            frame = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
-            if frame is not None:
-                frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        except Exception:
-            pass
+    frame_count = 0
+    last_fps_time = time.time()
+    last_save_time = time.time()
+    fps = 0.0
+    session_points = 0
+    session_items = 0
+    unique_items = set()
 
-    if frame_rgb is None:
-        video_placeholder.error(
-            f"Cannot access camera source.\n\n"
-            "**Troubleshooting:**\n"
-            "- Allow camera access in System Settings > Privacy > Camera\n"
-            "- If using DroidCam: ensure phone and Mac are on same WiFi\n"
-            "- Try a different camera index (0, 1, 2) in sidebar"
-        )
+    try:
+        while st.session_state.live_running:
+            frame_rgb = None
+
+            if use_snapshot:
+                base_url = normalize_droidcam_url(source)
+                try:
+                    resp = urllib.request.urlopen(base_url + "/shot.jpg", timeout=3)
+                    img_array = np.frombuffer(resp.read(), dtype=np.uint8)
+                    frame = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+                    if frame is not None:
+                        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                except Exception:
+                    pass
+            else:
+                ret, frame = cap.read()
+                if ret and frame is not None:
+                    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+            if frame_rgb is None:
+                time.sleep(0.1)
+                continue
+
+            # Run detection
+            annotated, detections = detect_and_classify(
+                model, frame_rgb, confidence_threshold=confidence
+            )
+
+            # FPS counter
+            frame_count += 1
+            now = time.time()
+            if now - last_fps_time >= 1.0:
+                fps = frame_count / (now - last_fps_time)
+                frame_count = 0
+                last_fps_time = now
+
+            video_placeholder.image(annotated, channels="RGB", use_container_width=True)
+            info_placeholder.caption(f"FPS: {fps:.1f} | Objects: {len(detections)} | {source_label}")
+            render_live_sidebar_detections(stats_placeholder, detections)
+
+            if detections:
+                table_data = [{
+                    "Item": d["item"],
+                    "Bin": BIN_LABELS[d["bin_type"]],
+                    "Degradability": d["degradability"],
+                    "Conf": f"{d['confidence']:.0%}",
+                } for d in detections]
+                table_placeholder.table(table_data)
+
+                # Save to history + award credits every save_interval seconds
+                if (now - last_save_time) >= save_interval:
+                    scan_points = add_to_history(detections, f"Live: {source_label}")
+                    last_save_time = now
+                    session_points += scan_points
+                    session_items += len(detections)
+                    for d in detections:
+                        unique_items.add(d["item"])
+
+                # Always show running session total
+                points_placeholder.markdown(
+                    f"<div style='background:#d4edda; padding:12px; border-radius:10px; text-align:center;'>"
+                    f"<b>Session:</b> {session_points} Green Credits | "
+                    f"{session_items} items saved | "
+                    f"{len(unique_items)} unique items | "
+                    f"Total: {st.session_state.green_points} credits"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
+            else:
+                table_placeholder.empty()
+
+            time.sleep(0.03)
+
+    finally:
+        if cap is not None:
+            cap.release()
         st.session_state.live_running = False
-        return
-
-    # Run detection
-    annotated, detections = detect_and_classify(
-        model, frame_rgb, confidence_threshold=confidence
-    )
-
-    video_placeholder.image(annotated, channels="RGB", use_container_width=True)
-    info_placeholder.caption(f"Objects: {len(detections)} | Source: {source_label}")
-    render_live_sidebar_detections(stats_placeholder, detections)
-
-    if detections:
-        table_data = [{
-            "Item": d["item"],
-            "Bin": BIN_LABELS[d["bin_type"]],
-            "Degradability": d["degradability"],
-            "Conf": f"{d['confidence']:.0%}",
-        } for d in detections]
-        table_placeholder.table(table_data)
-
-        now = time.time()
-        last_save = st.session_state.get("live_last_save", 0)
-        if (now - last_save) >= save_interval:
-            add_to_history(detections, f"Live: {source_label}")
-            st.session_state.live_last_save = now
-
-    # Auto-rerun for next frame
-    if st.session_state.live_running:
-        time.sleep(0.3)
-        st.rerun()
 
 
 # ────────────────── MAIN ──────────────────
@@ -540,14 +608,18 @@ def main():
         )
 
         st.divider()
+        st.header("Live Feed Settings")
+        cam_index = st.selectbox("Webcam Camera Index", [0, 1, 2], index=0)
+        save_interval = st.slider(
+            "Save history every (sec)",
+            min_value=1, max_value=30, value=3, step=1,
+        )
+
+        st.divider()
         st.header("DroidCam Setup")
         droidcam_ip = st.text_input(
             "DroidCam IP Address",
             placeholder="http://192.168.1.100:4747",
-        )
-        save_interval = st.slider(
-            "Live: Save history every (sec)",
-            min_value=3, max_value=30, value=10, step=1,
         )
 
         st.divider()
@@ -572,7 +644,7 @@ def main():
     # ── Input Tabs ──
     input_method = st.radio(
         "Choose input method:",
-        ["Upload Image", "Take Photo (Webcam)", "DroidCam Snapshot", "DroidCam Live Feed"],
+        ["Upload Image", "Take Photo (Webcam)", "Webcam Live Feed", "DroidCam Snapshot", "DroidCam Live Feed"],
         horizontal=True,
     )
 
@@ -593,6 +665,22 @@ def main():
         if camera_input is not None:
             image = Image.open(camera_input).convert("RGB")
             source_label = "Webcam"
+
+    elif input_method == "Webcam Live Feed":
+        btn_col1, btn_col2 = st.columns(2)
+        with btn_col1:
+            if st.button("Start Live Feed", type="primary", disabled=st.session_state.live_running):
+                st.session_state.live_running = True
+                st.session_state.live_source = "webcam"
+                st.rerun()
+        with btn_col2:
+            if st.button("Stop Live Feed", type="secondary", disabled=not st.session_state.live_running):
+                st.session_state.live_running = False
+                st.rerun()
+
+        if st.session_state.live_running and st.session_state.get("live_source") == "webcam":
+            run_live_feed(model, cam_index, confidence, save_interval, source_label=f"Webcam {cam_index}")
+            return
 
     elif input_method == "DroidCam Snapshot":
         if not droidcam_ip:
@@ -619,14 +707,15 @@ def main():
         else:
             btn_col1, btn_col2 = st.columns(2)
             with btn_col1:
-                if st.button("Start Live Feed", type="primary", disabled=st.session_state.live_running):
+                if st.button("Start DroidCam Live", type="primary", disabled=st.session_state.live_running):
                     st.session_state.live_running = True
+                    st.session_state.live_source = "droidcam"
                     st.rerun()
             with btn_col2:
-                if st.button("Stop Live Feed", type="secondary", disabled=not st.session_state.live_running):
+                if st.button("Stop DroidCam Live", type="secondary", disabled=not st.session_state.live_running):
                     st.session_state.live_running = False
                     st.rerun()
-            if st.session_state.live_running:
+            if st.session_state.live_running and st.session_state.get("live_source") == "droidcam":
                 run_live_feed(model, droidcam_ip, confidence, save_interval)
                 return
 

@@ -9,6 +9,10 @@ training/raw_images/
 training/dataset/
 training/runs/
 
+# Base YOLO model (auto-downloaded by ultralytics)
+yolov8n.pt
+training/yolov8n.pt
+
 # OS
 .DS_Store
 Thumbs.db

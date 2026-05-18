@@ -1,11 +1,7 @@
 """
-Step 3: Fine-tune YOLOv8 on custom dataset (tomato, keys, paper).
+Step 3: Fine-tune YOLOv8 on custom dataset (tomato, keys, paper, pen, lip_balm).
 
-This script:
-  1. Loads pretrained YOLOv8n weights
-  2. Fine-tunes on the custom dataset
-  3. Saves the best model weights
-  4. Copies best weights to the main project folder
+Trains with aggressive augmentation for better generalization from auto-labeled data.
 """
 
 import shutil
@@ -13,7 +9,7 @@ from pathlib import Path
 from ultralytics import YOLO
 
 DATASET_YAML = Path(__file__).parent / "dataset" / "dataset.yaml"
-PROJECT_DIR = Path(__file__).parent.parent  # smart-waste-segregation/
+PROJECT_DIR = Path(__file__).parent.parent
 OUTPUT_NAME = "waste_custom"
 
 
@@ -27,26 +23,36 @@ def train():
         print("Run prepare_dataset.py first!")
         return
 
-    # Load pretrained YOLOv8n
-    model = YOLO("yolov8n.pt")
+    weights = str(Path(__file__).parent / "yolov8n.pt")
+    model = YOLO(weights)
 
-    # Fine-tune on custom dataset
     results = model.train(
         data=str(DATASET_YAML),
-        epochs=50,
+        epochs=100,
         imgsz=640,
         batch=16,
         name=OUTPUT_NAME,
-        patience=10,        # early stopping
+        patience=20,
         save=True,
         plots=True,
         verbose=True,
+        # Aggressive augmentation to compensate for auto-labels
+        augment=True,
+        hsv_h=0.02,
+        hsv_s=0.7,
+        hsv_v=0.4,
+        degrees=15.0,
+        translate=0.2,
+        scale=0.5,
+        shear=5.0,
+        flipud=0.3,
+        fliplr=0.5,
+        mosaic=1.0,
+        mixup=0.15,
     )
 
-    # Find best weights
     best_weights = Path(f"runs/detect/{OUTPUT_NAME}/weights/best.pt")
     if not best_weights.exists():
-        # Try alternate path
         for p in Path("runs/detect").rglob("best.pt"):
             best_weights = p
             break
@@ -55,7 +61,6 @@ def train():
         dest = PROJECT_DIR / "yolov8n_custom.pt"
         shutil.copy2(str(best_weights), str(dest))
         print(f"\nBest model saved to: {dest}")
-        print("Update your app to use 'yolov8n_custom.pt'!")
     else:
         print("WARNING: Could not find best.pt weights")
         print("Check runs/detect/ directory for training output")

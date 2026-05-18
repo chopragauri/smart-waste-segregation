@@ -1,5 +1,5 @@
 """
-Master script: Download images → Prepare dataset → Train YOLOv8.
+Master script: Download images -> Prepare dataset -> Train YOLOv8.
 Run this once to create the custom fine-tuned model.
 """
 

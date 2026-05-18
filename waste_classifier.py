@@ -29,7 +29,7 @@ WASTE_INFO = {
     "cake":         ("Wet", "Biodegradable"),
     "sandwich":     ("Wet", "Biodegradable"),
     "potted plant": ("Wet", "Biodegradable"),
-    "tomato":       ("Wet", "Biodegradable"),        # custom-trained
+    "tomato":       ("Wet", "Biodegradable"),          # custom-trained
 
     # --- METAL BIN --- all non-biodegradable
     "fork":          ("Metal", "Non-Biodegradable"),
@@ -40,16 +40,16 @@ WASTE_INFO = {
     "fire hydrant":  ("Metal", "Non-Biodegradable"),
     "stop sign":     ("Metal", "Non-Biodegradable"),
     "parking meter": ("Metal", "Non-Biodegradable"),
-    "bicycle":       ("Metal", "Non-Biodegradable"),
-    "car":           ("Metal", "Non-Biodegradable"),
-    "motorcycle":    ("Metal", "Non-Biodegradable"),
-    "bus":           ("Metal", "Non-Biodegradable"),
-    "train":         ("Metal", "Non-Biodegradable"),
-    "truck":         ("Metal", "Non-Biodegradable"),
-    "airplane":      ("Metal", "Non-Biodegradable"),
-    "boat":          ("Metal", "Non-Biodegradable"),
+    "bicycle":       None,
+    "car":           None,
+    "motorcycle":    None,
+    "bus":           None,
+    "train":         None,
+    "truck":         None,
+    "airplane":      None,
+    "boat":          None,
     "sink":          ("Metal", "Non-Biodegradable"),
-    "keys":          ("Metal", "Non-Biodegradable"),  # custom-trained
+    "keys":          ("Metal", "Non-Biodegradable"),    # custom-trained
 
     # --- DRY BIN --- plastic, glass, electronics, paper, cloth, synthetic
     # Plastic
@@ -83,7 +83,9 @@ WASTE_INFO = {
     "hair drier":   ("Dry", "Non-Biodegradable"),
 
     # Paper / Wood (dry bin, biodegradable)
-    "paper":        ("Dry", "Biodegradable"),         # custom-trained
+    "paper":        ("Dry", "Biodegradable"),           # custom-trained
+    "pen":          ("Dry", "Non-Biodegradable"),      # custom-trained
+    "lip_balm":     ("Dry", "Non-Biodegradable"),      # custom-trained
     "book":         ("Dry", "Biodegradable"),
     "bench":        ("Dry", "Biodegradable"),
     "dining table": ("Dry", "Biodegradable"),
@@ -101,7 +103,7 @@ WASTE_INFO = {
     "tennis racket":  ("Dry", "Non-Biodegradable"),
     "baseball glove": ("Dry", "Non-Biodegradable"),
     "skis":           ("Dry", "Non-Biodegradable"),
-    "traffic light":  ("Dry", "Non-Biodegradable"),
+    "traffic light":  None,
 
     # Animals (not typical waste, skip)
     "bird": None,
@@ -173,6 +175,8 @@ ITEM_DISPLAY_NAMES = {
     "tomato": "Tomato",
     "keys": "Keys (Metal)",
     "paper": "Paper",
+    "pen": "Pen (Plastic)",
+    "lip_balm": "Lip Balm (Plastic)",
 }
 
 # Colors for bin types

@@ -1,6 +1,8 @@
 """
-Step 1: Download training images for custom classes (tomato, keys, paper).
+Step 1: Download training images for custom classes.
 Uses bing_image_downloader to fetch images from the web.
+
+Custom classes: tomato, keys, paper, pen, lip_balm
 """
 
 import os
@@ -10,7 +12,6 @@ from bing_image_downloader import downloader
 
 BASE_DIR = Path(__file__).parent / "raw_images"
 
-# Search queries per class — multiple queries for diversity
 QUERIES = {
     "tomato": [
         "single tomato fruit",
@@ -18,6 +19,9 @@ QUERIES = {
         "red tomato close up",
         "tomato vegetable photo",
         "fresh tomato",
+        "tomato on cutting board",
+        "cherry tomato close up",
+        "tomato kitchen counter",
     ],
     "keys": [
         "metal key single",
@@ -25,6 +29,9 @@ QUERIES = {
         "keys bunch photo",
         "metal keys close up",
         "door key photo",
+        "car keys on table",
+        "key chain photo",
+        "single brass key",
     ],
     "paper": [
         "sheet of paper on desk",
@@ -32,10 +39,33 @@ QUERIES = {
         "paper sheet white",
         "notebook paper photo",
         "paper on table",
+        "stack of paper sheets",
+        "paper document on desk",
+        "loose paper pages",
+    ],
+    "pen": [
+        "ballpoint pen on desk",
+        "single pen photo",
+        "pen on paper close up",
+        "plastic pen photo",
+        "writing pen on table",
+        "blue pen close up",
+        "pen isolated white background",
+        "ball pen photo",
+    ],
+    "lip_balm": [
+        "lip balm tube photo",
+        "chapstick on table",
+        "lip balm close up",
+        "small lip balm product",
+        "lip balm stick photo",
+        "chapstick tube close up",
+        "lip balm product isolated",
+        "lip balm plastic tube",
     ],
 }
 
-IMAGES_PER_QUERY = 25  # ~25 per query x 5 queries = ~125 per class
+IMAGES_PER_QUERY = 30
 
 
 def download_all():
@@ -60,7 +90,6 @@ def download_all():
                     force_replace=False,
                     timeout=10,
                 )
-                # Move downloaded images into class folder
                 temp_dir = BASE_DIR / "_temp" / query
                 if temp_dir.exists():
                     for j, img_file in enumerate(temp_dir.iterdir()):
@@ -70,11 +99,9 @@ def download_all():
             except Exception as e:
                 print(f"    Warning: {e}")
 
-        # Count images
-        count = len(list(class_dir.glob("*")))
+        count = len([f for f in class_dir.iterdir() if f.suffix.lower() in ('.jpg', '.jpeg', '.png', '.bmp', '.webp')])
         print(f"  Total images for {class_name}: {count}")
 
-    # Cleanup temp
     temp_dir = BASE_DIR / "_temp"
     if temp_dir.exists():
         shutil.rmtree(temp_dir)

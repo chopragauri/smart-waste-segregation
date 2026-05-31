@@ -100,7 +100,6 @@ This runs the full pipeline: downloads training images → builds YOLO dataset �
 ## 👩‍💻 Built By
 
 **Gauri Chopra** — [chopragauri](https://github.com/chopragauri)  
-**Shivaansh Kaushik**  
 
 Department of Artificial Intelligence, Amity University, Noida
 
@@ -110,7 +109,7 @@ Department of Artificial Intelligence, Amity University, Noida
 
 **All Rights Reserved.**
 
-Copyright (c) 2026 Gauri Chopra & Shivaansh Kaushik.
+Copyright (c) 2026 Gauri Chopra.
 
 This software and associated documentation files (the "Software") are the exclusive intellectual property of the authors. No part of this Software may be reproduced, distributed, transmitted, displayed, published, or broadcast in any form or by any means, including photocopying, recording, or other electronic or mechanical methods, without the prior written permission of the authors.
 
